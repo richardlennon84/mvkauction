@@ -5,12 +5,11 @@ require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'your_stripe_secret_key_here');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_real_key_here');
 
 app.use(cors());
 app.use(express.json());
 
-// Store votes in memory
 const votes = {
   char1: 0,
   char2: 0,
@@ -18,12 +17,10 @@ const votes = {
   char4: 0
 };
 
-// Fetch votes
 app.get('/votes', (req, res) => {
   res.json(votes);
 });
 
-// Create Stripe Checkout session
 app.post('/create-checkout-session', async (req, res) => {
   const { voteOption } = req.body;
 
@@ -56,9 +53,20 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-// Stripe success callback
 app.get('/success', (req, res) => {
   const vote = req.query.vote;
   if (votes.hasOwnProperty(vote)) {
     votes[vote]++;
-    res.send(`<h1>Thanks for voting for ${vote
+    res.send(`<h1>Thanks for voting for ${vote}!</h1>`);
+  } else {
+    res.send('<h1>Vote success, but option not tracked.</h1>');
+  }
+});
+
+app.get('/cancel', (req, res) => {
+  res.send('<h1>Vote canceled.</h1>');
+});
+
+app.listen(port, () => {
+  console.log(`✅ Server running on port ${port}`);
+});

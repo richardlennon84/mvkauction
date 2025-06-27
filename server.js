@@ -1,29 +1,21 @@
 const express = require('express');
-const cors = require('cors');
-const Stripe = require('stripe');
-require('dotenv').config();
-
 const app = express();
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_real_key_here');
-const port = process.env.PORT || 3000;
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const bodyParser = require('body-parser');
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
+app.use(bodyParser.json());
 
-const votes = {
-  char1: 0,
-  char2: 0,
-  char3: 0,
-  char4: 0
+const priceMap = {
+  1: 1000,  // £10 in pence
+  2: 1500   // £15 in pence
 };
 
-app.get('/votes', (req, res) => {
-  res.json(votes);
-});
+app.post('/create-checkout', async (req, res) => {
+  const { votes, director } = req.body;
 
-app.post('/create-checkout-session', async (req, res) => {
-  const { voteOption } = req.body;
+  if (!priceMap[votes]) {
+    return res.status(400).json({ error: 'Invalid votes count' });
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -33,33 +25,31 @@ app.post('/create-checkout-session', async (req, res) => {
         price_data: {
           currency: 'gbp',
           product_data: {
-            name: `Vote for ${voteOption}`
+            name: `${votes} vote${votes > 1 ? 's' : ''} for ${director}`
           },
-          unit_amount: 1000
+          unit_amount: priceMap[votes]
         },
-        quantity: 1
+        quantity: 1,
       }],
-      success_url: `https://mvkauction.onrender.com/success?vote=${voteOption}`,
-      cancel_url: `https://mvkauction.onrender.com/cancel`
+      metadata: {
+        votes: votes.toString(),
+        director: director
+      },
+      success_url: `${process.env.FRONTEND_URL}/success`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`
     });
 
-    res.json({ id: session.id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Stripe error');
+    res.json({ url: session.url });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/success', (req, res) => {
-  const vote = req.query.vote;
-  if (votes[vote] !== undefined) votes[vote]++;
-  res.send(`<h1>Thanks for voting for ${vote}!</h1><a href="/">Back</a>`);
+// Stripe webhook endpoint placeholder (set up later)
+app.post('/webhook', bodyParser.raw({type: 'application/json'}), (req, res) => {
+  // Handle Stripe webhook here
+  res.sendStatus(200);
 });
 
-app.get('/cancel', (req, res) => {
-  res.send(`<h1>Vote cancelled.</h1><a href="/">Back</a>`);
-});
-
-app.listen(port, () => {
-  console.log(`✅ Server running on port ${port}`);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
